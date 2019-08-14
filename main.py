@@ -1,45 +1,35 @@
-from math import pow
+from math import pow, floor
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
-import xlrd
+import numpy as np
+# import xlrd
 
+import csv
 
-gammaGrid = [x/10 for x in range(0, 150)]  # Possible risk aversion values
+gammaGrid = [x/10 for x in range(11, 150)]  # Possible risk aversion values
 poverty = {1: 12490, 2: 16910, 3: 21330, 4: 25750, 5: 30170, 6: 34590, 7: 39010, 8: 43430}
 # poverty line in 2019, see https://aspe.hhs.gov/poverty-guidelines
 beta = 0.98
+percentiles = [5, 10, 25, 50, 75, 95]
 
 
-def collectBorrowers():
+def collectBorrowers(incomes):
     excelBorrowerList = []
 
-    loc = ("scf_data/scf_individual.csv")
-    wb = xlrd.open_workbook(loc)
-    sheet = wb.sheet_by_index(0)
-
-    for row_i in range(sheet.nrows):
-        excelBorrowerList.append(sheet.row_values(row_i))
+    loc = "scf_data/scf_individual.csv"
+    with open(loc, newline='') as csvfile:
+        sheet = csv.reader(csvfile, delimiter=' ', quotechar='|')
+        for row in sheet:
+            excelBorrowerList.append(row)
 
     del excelBorrowerList[0]  # Remove labelling column
 
     borrowerList = []
     for borrower in excelBorrowerList:
-        newBorrower = Borrower(borrower)
+        parseBorrower = borrower[0].split(',')
+        newBorrower = Borrower(parseBorrower, incomes)
+        borrowerList.append(newBorrower)
     return borrowerList
-
-
-def loanRepay(loanAmount, interestRate, numYears):  # monthly repayment amount in the 10 year loan option
-    n = 12 * numYears
-    r = interestRate / 12
-
-    pmt = loanAmount * ((r * ((r + 1) ** n)) / (((r + 1) ** n) - 1))
-
-    return pmt
-
-
-def ibrRepay(loanAmount, income, alpha, familySize):  # monthly repayment amount in the IBR option
-    pmt = min(alpha * discretIncome(income, familySize) / 12, loanRepay(loanAmount, 0.039, 10))
-    return pmt
 
 
 def discretIncome(income, familySize):
@@ -47,81 +37,146 @@ def discretIncome(income, familySize):
 
 
 class Borrower:
-    def __init__(self, excelBorrower):  # Converts excel elements to data
-        self.age = excelBorrower[0]
-        self.occu = excelBorrower[4]
-        self.principle = excelBorrower[1]
-        self.remainingLoan = excelBorrower[3]
-        self.educ = excelBorrower[6]
-        self.income = calcIncomePerc(self.age, self.occu)
+    def __init__(self, excelBorrower, incomes):  # Converts excel elements to data
+        self.age = int(excelBorrower[0])
+        self.occu = int(excelBorrower[4]) - 1  # For list entries
+        self.principle = int(excelBorrower[1])
+        self.remainingLoan = int(excelBorrower[3])
+        self.educ = int(excelBorrower[6])
         # TODO Add family sizes
         # TODO Add States
+        self.loan_type = 1 if int(excelBorrower[3]) else 0
+
+        if 25 <= self.age <= 28:
+            self.age_bin = 0
+        elif 29 <= self.age <= 32:
+            self.age_bin = 1
+        elif 33 <= self.age <= 36:
+            self.age_bin = 2
+        elif 37 <= self.age <= 40:
+            self.age_bin = 3
+        else:
+            self.age_bin = 4
+
+        self.income = incomes[self.age_bin][self.occu - 1]
 
 
-def calcIncomePerc(age, occu):
-    loc = ("scf_data/acs_income.csv")
-    wb = xlrd.open_workbook(loc)
-    sheet = wb.sheet_by_index(0)
+def calcIncomes():  # Calculates all combinations of age, occu, and perc income values
+    # TODO Update to allow for on demand calls
+    loc = "scf_data/acs_income.csv"
 
-    if 10 <= age <= 18:
-        age_bin = 1
-    elif 18 <= age <= 25:
-        age_bin = 2
-    else:
-        age_bin = 3
-    # TODO update age bins
+    incomeList = []
+    with open(loc, newline='') as csvfile:
+        sheet = csv.reader(csvfile, delimiter=' ', quotechar='|')
 
-    percIncomes = [0 for x in range(6)]
-    for state in range(56):  # Average income over all states
-        rowNumber = state * 30 + (occu - 1) * 5 + age_bin + 1
-        percIncomes = [sum(percIncomes) for x in zip(percIncomes, sheet.row_values(rowNumber)[3:9])]  # Adds up the old income with the current states values
+        for row in sheet:
+            incomeList.append(row)
 
-    for idx, perc in enumerate(percIncomes):
-        percIncomes[idx] /= 56  # Normalize
+        del incomeList[0]
+
+        percIncomes = []
+        for age_bin in range(5):
+            percIncomes.append([])  # 1st index finds the appropriate age bin
+
+            for occu in range(6):
+                percIncomes[age_bin].append([0 for x in percentiles])  # 2nd index finds the occupation
+
+                for state in range(20):  # Average income over all states
+                    rowNumber = state * 30 + (occu - 1) * 5 + age_bin + 1
+                    newIncomes = []
+
+                    parseRow = incomeList[rowNumber][0].split(',')
+                    for idx, perc in enumerate(percentiles):
+                        newIncomes.append(int(parseRow[idx + 3]))
+
+                    percIncomes[age_bin][occu] = [sum(x) for x in zip(percIncomes[age_bin][occu], newIncomes)]
+                    # Adds up the old income with the current states values
+
+                for idx, perc in enumerate(percentiles):
+                    percIncomes[age_bin][occu][idx] /= 20  # TODO Change normalization when state number is updated
 
     return percIncomes
 
 
-def loanConsumption(income, principle, rate):  # TODO Incorrect loan payments currently, update
-    payments = []
-    currentTotal = principle
+def loanRepay(loanAmount, interestRate, numYears):  # monthly repayment amount in the 10 year loan option
+    n = 12 * numYears
+    r = interestRate / 12
 
-    # TODO allow for loan defaults
-    for year in range(10):  # each year part of the principle is paid off, and the remainder has interest
-        payment = principle / 10
-        currentTotal -= payment
-        interest = currentTotal * (1 + rate)
-        currentTotal += interest
-        principle += interest
-        payments.append(payment)
+    payment = loanAmount * ((r * ((r + 1) ** n)) / (((r + 1) ** n) - 1))
 
-    consumption = [income[period] - payments[period] for period in range(10)]
+    return [payment] * n
+
+
+def loanConsumption(incomes, principle, rate=0.06):
+    # TODO check if correct default method (currently 0.1)
+    # TODO Update num years for loan
+    # TODO fix income recording for default
+    consumption = []
+    for idx, perc in enumerate(percentiles):
+        paymentStream = [min(loanPayment, incomes[idx] - 0.1) for loanPayment in loanRepay(principle, rate, 10)]
+        percCons = []
+        for monthsPayment in paymentStream:
+            percCons.append(incomes[idx] - monthsPayment)
+
+        consumption.append(percCons)
 
     return consumption
 
 
-def IBRConsumption(principle, income, rate):  # TODO Incorrect payments, fix
-    payments = []
-    currentTotal = principle
+def ibrRepay(loanAmount, interestRate, numYears, income, alpha, familySize):  # TODO loan forgiveness
+    n = 12 * numYears  # number of repayment periods
+    r = interestRate / 12  # monthly interest rate
+    p = loanAmount  # principal amount
+    pmt_cap = loanRepay(loanAmount, interestRate, 10)[0]  # payment cap
 
-    for year in range(10):
-        payment = max(min(principle/10, discretIncome(income)), 0)  # Cannot pay more than initial loan or less than 0
-        currentTotal -= payment
-        interest = currentTotal * (1 + rate)
-        currentTotal += interest
-        principle += interest
-        payments.append(payment)
+    pmt_list = [0] * n
 
-    consumption = [income[period] - payments[period] for period in range(10)]
+    # populate monthly income from yearly income list
+    monthly_inc = [0] * n
+
+    for i in range(n):  # TODO Allow income to change over years
+        monthly_inc[i] = income / 12
+
+    # deduct from principal until either forgiveness or principal is repaid
+
+    for i in range(n):
+        if p <= 0:
+            break
+        else:  # TODO Allow income to change over years
+            pmt = min(alpha * discretIncome(income, familySize) / 12, pmt_cap)
+            intr_pmt = p * r  # payment to interest
+            prin_pmt = pmt - intr_pmt  # payment to principal
+            p = p - prin_pmt  # new principal amount
+            pmt_list[i] = pmt
+
+    return pmt_list
+
+
+# TODO What is alpha
+def IBRConsumption(incomes, principle, alpha=0.1, rate=0.06):
+    consumption = []
+    for idx, perc in enumerate(percentiles):
+        # TODO fix family size
+        paymentList = ibrRepay(principle, rate, 10, incomes[idx], alpha, 1)
+
+        percCons = []
+        for payment in paymentList:
+            percCons.append(incomes[idx] - payment)
+
+        consumption.append(percCons)
 
     return consumption
 
 
 def totalUtility(gamma, consumption):  # Returns utility from taking a loan
     utility = 0
-    for period in range(10):
-        utility += pow(beta, period - 1) * pow(consumption[period], 1 - gamma) / (1 - gamma)
+    percZero = [0]
+    percZero.extend(percentiles)  # Add zero to front to allow cumulative probabilities
 
+    for idx, perc in enumerate(percentiles):
+        for period, c in enumerate(consumption[idx]):  # Iterate over every month's consumption
+            utility += (perc - percZero[idx - 1]) * \
+                       pow(beta, period - 1) * pow(c, 1 - gamma) / (1 - gamma)
     return utility
 
 
@@ -133,56 +188,58 @@ def plotIndividualGammas(loanBetter):  # Graphs the gammas for which loans > IBR
 
 
 def borrowCalc(borrower):
-    loanBetter = []
-
     for gamma in gammaGrid:
-        lConsumption = loanConsumption(borrower.principle, borrower.interest, borrower.rate)
-        iConsumption = IBRConsumption(borrower.principle, borrower.interest, borrower.rate)
+        lConsumption = loanConsumption(borrower.income, borrower.principle)
+        iConsumption = IBRConsumption(borrower.income, borrower.principle)
 
         lUtility = totalUtility(gamma, lConsumption)
         iUtility = totalUtility(gamma, iConsumption)
 
-        if lUtility > iUtility:
-            loanBetter.append(1)
-        else:
-            loanBetter.append(0)
+        if lUtility < iUtility:
+            return gamma  # Returns first gamma for which IDR is better
 
-    # plotIndividualGammas(loanBetter)
-
-    for gIndex, gamma in enumerate(gammaGrid):
-        if loanBetter[gIndex] == 0:
-            return gamma, loanBetter
+    return gammaGrid[-1]
 
 
-def graphGammas(gammaList):
+def graphGammas(gammaList, title):
+    if gammaList is None:
+        return 0
+
     num_bins = 20
-    # the histogram of the data
-    n, bins, patches = plt.hist(gammaList, num_bins, normed=1, facecolor='blue', alpha=0.5)
+
+    n, bins, patches = plt.hist(np.asarray(gammaList), num_bins, density=1, facecolor='blue', alpha=0.5)
 
     plt.xlabel('Gamma')
     plt.ylabel('Occurrences')
-    plt.title('Histogram of Gammas')
+    plt.title(title)
 
-    # Tweak spacing to prevent clipping of ylabel
+    # Tweak spacing to prevent clipping of y label
     plt.subplots_adjust(left=0.15)
     plt.show()
 
 
 def main():
-    borrowerList = collectBorrowers()
+    incomes = calcIncomes()
+    borrowerList = collectBorrowers(incomes)
 
     gammaLess = []
     gammaGreater = []
+    print(1)
+    #for borrower in borrowerList:
+    for borrowerIdx in range(40):
+        borrowerGamma = borrowCalc(borrowerList[borrowerIdx])
 
-    for borrower in borrowerList:
-        borrowerGamma = borrowCalc(borrower)
-
-        if borrower.loan:
+        if borrowerList[borrowerIdx].loan_type:
             gammaLess.append(borrowerGamma)
         else:
             gammaGreater.append(borrowerGamma)
+    print(2)
 
-    graphGammas(gammaLess)
-    graphGammas(gammaGreater)
+    graphGammas(gammaLess, "Loan Gammas")
+
+    graphGammas(gammaGreater, "IDR Gammas")
+
+
+main()
 
 

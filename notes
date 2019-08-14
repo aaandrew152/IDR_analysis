@@ -2,7 +2,10 @@ Concerns:
 The choice between IDR and loan isn't a one time choice, but repeatedly made throughout the periods
 Need to break down by state
 Could switch to IDR in a later period based on updated information regarding income
+Double check if both payment levels are correct
+Update the income if age bins change part way through
+Turn the model into a logit? Should we allow gamma to vary based upon population characteristics?
 
-Questions for 8/12:
-What are the age bins?
-Where is the family size for the individuals?
+Followups:
+Include interest levels from scf data
+Degree type?
