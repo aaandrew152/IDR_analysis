@@ -9,3 +9,6 @@ Turn the model into a logit? Should we allow gamma to vary based upon population
 Followups:
 Include interest levels from scf data
 Degree type?
+
+Questions:
+Double check IDR rates
