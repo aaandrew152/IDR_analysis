@@ -35,6 +35,7 @@ def collectBorrowers(incomes):
 
 def discretIncome(income, familySize):
     return max(0, income - 1.5 * poverty[familySize])  # TODO Update for states
+    # 08/15/2019 (DN): all states except Alaska seem to have same standards
 
 
 class Borrower:
@@ -226,5 +227,3 @@ def main():
 
 
 main()
-
-
