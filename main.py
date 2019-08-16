@@ -34,6 +34,7 @@ def collectBorrowers(incomes):
 
 def discretIncome(income, familySize):
     return max(0, income - 1.5 * poverty[familySize])  # TODO Update for states
+    # 08/15/2019 (DN): all states except Alaska seem to have same standards
 
 
 class Borrower:
@@ -113,6 +114,7 @@ def loanConsumption(incomes, principle, rate=0.06, default=1):
     # TODO check if correct default method (currently 0.1)
     # TODO Update num years for loan
     # TODO fix income recording for default
+    # TODO fix the interest rate later
     consumption = []
     for idx, perc in enumerate(percentiles):
         paymentStream = [min(loanPayment, incomes[idx] / 12 - default) for loanPayment in loanRepay(principle, rate, 10)]
@@ -321,5 +323,3 @@ def main():
 
 
 main()
-
-
