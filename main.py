@@ -1,17 +1,16 @@
-from math import pow, floor
+from math import pow, floor, log
 import matplotlib.pyplot as plt
-import matplotlib.mlab as mlab
 import numpy as np
-# import xlrd
-
 import csv
+import scipy.stats
 
 gammaGrid = [x/2 for x in range(0, 30)]  # Possible risk aversion values
 del gammaGrid[2]  # Skips case where gamma = 1 to avoid dividing by infinity and writing up special ln case
 poverty = {1: 12490, 2: 16910, 3: 21330, 4: 25750, 5: 30170, 6: 34590, 7: 39010, 8: 43430}
 # poverty line in 2019, see https://aspe.hhs.gov/poverty-guidelines
 beta = pow(0.98, 1/12)
-percentiles = [5, 10, 25, 50, 75, 95]
+percentiles = [.05, .1, .25, .5, .75, .95]
+costGrid = [x * 1000 for x in range(50)]  # Generates costs between 0 and 10,000
 
 
 def collectBorrowers(incomes):
@@ -44,8 +43,6 @@ class Borrower:
         self.IDR = 1 if int(excelBorrower[2]) else 0
         self.remainingLoan = int(excelBorrower[3])
         self.occu = int(excelBorrower[4]) - 1  # For list entries
-
-
         self.educ = int(excelBorrower[6])
         # TODO Add family sizes
         # TODO Add States
@@ -82,7 +79,7 @@ def calcIncomes():  # Calculates all combinations of age, occu, and perc income 
             percIncomes.append([])  # 1st index finds the appropriate age bin
 
             for occu in range(6):
-                percIncomes[age_bin].append([0 for x in percentiles])  # 2nd index finds the occupation
+                percIncomes[age_bin].append([0 for _ in percentiles])  # 2nd index finds the occupation
 
                 for state in range(20):  # Average income over all states
                     rowNumber = state * 30 + (occu - 1) * 5 + age_bin + 1
@@ -97,6 +94,8 @@ def calcIncomes():  # Calculates all combinations of age, occu, and perc income 
 
                 for idx, perc in enumerate(percentiles):
                     percIncomes[age_bin][occu][idx] /= 20  # TODO Change normalization when state number is updated
+                    if percIncomes[age_bin][occu][idx] == 0:
+                        percIncomes[age_bin][occu][idx] = 1  # TODO Change minimum income
 
     return percIncomes
 
@@ -159,6 +158,7 @@ def IBRConsumption(incomes, principle, alpha=0.15, rate=0.06):
             percCons.append(incomes[idx] / 12 - payment)
 
         consumption.append(percCons)
+
     return consumption
 
 
@@ -174,7 +174,7 @@ def totalUtility(gamma, consumption):  # Returns utility from taking a loan
     return utility
 
 
-def borrowCalc(borrower):
+def findBorrowerGamma(borrower):
     lConsumption = loanConsumption(borrower.income, borrower.principle)
     iConsumption = IBRConsumption(borrower.income, borrower.principle)
 
@@ -194,7 +194,7 @@ def graphGammas(gammaList, title):
 
     num_bins = 20
 
-    n, bins, patches = plt.hist(np.asarray(gammaList), num_bins, density=1, facecolor='blue', alpha=0.5)
+    plt.hist(np.asarray(gammaList), num_bins, density=1, facecolor='blue', alpha=0.5)  # n, bins, patches =
 
     plt.xlabel('Gamma')
     plt.ylabel('Occurrences')
@@ -205,16 +205,12 @@ def graphGammas(gammaList, title):
     plt.show()
 
 
-def main():
-    incomes = calcIncomes()
-    borrowerList = collectBorrowers(incomes)
-
+def determineGammas(borrowerList):
     gammaLess = []
     gammaGreater = []
 
     for borrower in borrowerList:
-    #for borrowerIdx in range(4):
-        borrowerGamma = borrowCalc(borrower)
+        borrowerGamma = findBorrowerGamma(borrower)
 
         if borrower.IDR:
             gammaGreater.append(borrowerGamma)
@@ -223,6 +219,105 @@ def main():
 
     graphGammas(gammaLess, "Loan Gammas")
     graphGammas(gammaGreater, "IDR Gammas")
+
+
+# TODO is the utility unbalanced in the income? Might skew results towards high earners
+def borrowerUtilityDiff(borrower, gamma):  # Finds the respective difference in the utility between an ISA and a loan
+    lConsumption = loanConsumption(borrower.income, borrower.principle)
+    iConsumption = IBRConsumption(borrower.income, borrower.principle)
+    # totalConsDiff = 0
+    # for idx, perc in enumerate(percentiles):
+    #     totalConsDiff += sum(lConsumption[idx]) - sum(iConsumption[idx])
+    # print(totalConsDiff)
+    lUtility = totalUtility(gamma, lConsumption)
+    iUtility = totalUtility(gamma, iConsumption)
+
+    return lUtility - iUtility
+
+
+def estimateCost(utilityDiffs, choices):  # Runs MLE to find best cost value
+    maxLikelihood = -100000
+    closeCost = 0
+    for cost in costGrid:
+        likelihood = calcLikelihood(utilityDiffs, choices, cost)
+        if likelihood > maxLikelihood:
+            closeCost = cost
+            maxLikelihood = likelihood
+
+    return closeCost
+
+
+def normProb(newDiff):  # Calculates the normal prob of a loan
+    return scipy.stats.norm(0, 20000).cdf(newDiff)  # TODO Determine if std dev is fine
+
+
+def calcLikelihood(utilityDiffs, loanChoices, IDRCost):  # Calculates log likelihood value
+    logLikelihood = 0
+    for idx, diff in enumerate(utilityDiffs):
+        loanLikelihood = normProb(diff + IDRCost)
+
+        if loanChoices[idx]:  # If the borrower took a loan
+            likelihood = loanLikelihood
+        else:
+            likelihood = 1 - loanLikelihood
+
+        if likelihood == 0:  # TODO determine if necessary
+            return -10000000  # To avoid taking the log of 0 for extreme values of cost
+        else:
+            logLikelihood += log(likelihood)
+
+    return logLikelihood
+
+
+def newton_raphson(model, tol=1e-3, max_iter=1000, display=True):
+    i = 0
+    error = 100  # Initial error value
+
+    # Print header of output
+    if display:
+        header = f'{"Iteration_k":<13}{"Log-likelihood":<16}{"θ":<60}'
+        print(header)
+        print("-" * len(header))
+
+    # While loop runs while any value in error is greater
+    # than the tolerance until max iterations are reached
+    while np.any(error > tol) and i < max_iter:
+        H, G = model.H(), model.G()
+        newBeta = model.beta - (np.linalg.inv(H) @ G)
+        error = newBeta - model.beta
+        model.beta = newBeta
+
+        # Print iterations
+        if display:
+            betaList = [f'{t:.3}' for t in list(model.beta.flatten())]
+            update = f'{i:<13}{model.logL():<16.8}{betaList}'
+            print(update)
+
+        i += 1
+
+    print(f'Number of iterations: {i}')
+    print(f'β_hat = {model.beta.flatten()}')
+
+    return model.beta.flatten()        # Return a flat array for β (instead of a k_by_1 column vector)
+
+
+def costDiffToIncome(cost):  # Takes IDR costs and translates to an income level
+    return 0
+
+
+def main():
+    incomes = calcIncomes()
+    borrowerList = collectBorrowers(incomes)
+
+    gamma = 2  # TODO update value
+    utilityDiffs = []
+    for borrower in borrowerList:
+        utilityDiffs.append(borrowerUtilityDiff(borrower, gamma))
+
+    loanChoices = [1 - borrower.IDR for borrower in borrowerList]  # List of which borrowers chose loans
+    IDRCost = estimateCost(utilityDiffs, loanChoices)
+
+    print("The estimated IDRCost is: " + str(IDRCost))
 
 
 main()

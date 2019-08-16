@@ -12,3 +12,12 @@ Degree type?
 
 Questions:
 Double check IDR rates
+When gamma = 2 find some people suddenly prefer loans to IDRs
+Check secondary loans & consolidate
+Run with current incomes
+Allow incomes to grow by 5% per year
+Interpolate incomes over ages
+Allow for more gradual income changes wrt ages
+Calculate all incomes once and spit into a excel file rather than repeating every time
+When do they start paying off their loans?
+
