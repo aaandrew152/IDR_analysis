@@ -4,7 +4,6 @@ Need to break down by state
 Could switch to IDR in a later period based on updated information regarding income
 Double check if both payment levels are correct
 Update the income if age bins change part way through
-Turn the model into a logit? Should we allow gamma to vary based upon population characteristics?
 
 Followups:
 Include interest levels from scf data
@@ -20,4 +19,4 @@ Interpolate incomes over ages
 Allow for more gradual income changes wrt ages
 Calculate all incomes once and spit into a excel file rather than repeating every time
 When do they start paying off their loans?
-
+Check if IDRcost dependent upon characteristics is helpful
