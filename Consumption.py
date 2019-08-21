@@ -1,3 +1,5 @@
+from math import floor
+
 def discretIncome(income, familySize, poverty):
     return max(0, income - 1.5 * poverty[familySize])  # TODO Update for states
     # 08/15/2019 (DN): all states except Alaska seem to have same standards
@@ -12,6 +14,26 @@ def loanRepay(loanAmount, interestRate, numYears, maxYears=25):  # monthly repay
     return [payment] * n + [0] * 12 * (maxYears - numYears)
  # Todo principle shouldn't decrease if no payment made
 
+def loanRepay2(loanAmount, interestRate, income, numYears, maxYears=25):  # monthly repayment amount in the 10 year loan option
+    n = 12 * numYears
+    r = interestRate / 12
+    p = loanAmount
+    fixed_pmt = loanAmount * ((r * ((r + 1) ** n)) / (((r + 1) ** n) - 1))
+
+    pmt_list = [0] * (12 * maxYears)
+
+    for i in range(n):
+        if p <= 0:
+            break
+        else:  # TODO Allow income to change over years
+            pmt = min(income[floor(i/12)]/12,fixed_pmt)   # min of monthly income and fixed payment amount
+            intr_pmt = p * r  # payment to interest
+            prin_pmt = pmt - intr_pmt  # payment to principal
+            p = p - prin_pmt  # new principal amount
+            pmt_list[i] = pmt
+
+    return pmt_list
+ # Todo principle shouldn't decrease if no payment made
 
 def loanConsumption(incomes, principle, percentiles, rate=0.06, default=1):
     # TODO check if correct default method (currently 0.1)
