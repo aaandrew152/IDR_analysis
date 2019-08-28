@@ -1,20 +1,20 @@
 from math import floor
 
-def discretIncome(income, familySize, poverty):
-    return max(0, income - 1.5 * poverty[familySize])  # TODO Update for states
-    # 08/15/2019 (DN): all states except Alaska seem to have same standards
+
+def discretIncome(monthlyIncome, familySize, poverty):
+    return max(0, monthlyIncome * 12 - 1.5 * poverty[familySize])
 
 
-def loanRepay(loanAmount, interestRate, numYears, maxYears=25):  # monthly repayment amount in the 10 year loan option
+def loanRepayFixed(loanAmount, interestRate, numYears, maxYears=25):  # monthly repayment amount in the 10 year loan option
     n = 12 * numYears
     r = interestRate / 12
 
     payment = loanAmount * ((r * ((r + 1) ** n)) / (((r + 1) ** n) - 1))
 
     return [payment] * n + [0] * 12 * (maxYears - numYears)
- # Todo principle shouldn't decrease if no payment made
 
-def loanRepay2(loanAmount, interestRate, income, numYears, maxYears=25):  # monthly repayment amount in the 10 year loan option
+
+def loanRepay(loanAmount, interestRate, incomes, numYears, default, maxYears=25):
     n = 12 * numYears
     r = interestRate / 12
     p = loanAmount
@@ -25,37 +25,36 @@ def loanRepay2(loanAmount, interestRate, income, numYears, maxYears=25):  # mont
     for i in range(n):
         if p <= 0:
             break
-        else:  # TODO Allow income to change over years
-            pmt = min(income[floor(i/12)]/12,fixed_pmt)   # min of monthly income and fixed payment amount
+        else:
+            pmt = min(incomes[i] - default, fixed_pmt)   # min of monthly income and fixed payment amount
             intr_pmt = p * r  # payment to interest
             prin_pmt = pmt - intr_pmt  # payment to principal
             p = p - prin_pmt  # new principal amount
             pmt_list[i] = pmt
 
     return pmt_list
- # Todo principle shouldn't decrease if no payment made
 
-def loanConsumption(incomes, principle, percentiles, rate=0.06, default=1):
+
+def loanConsumption(incomes, principle, percentiles, numYears=10, rate=0.06, default=.1):
     # TODO check if correct default method (currently 0.1)
-    # TODO Update num years for loan
-    # TODO fix income recording for default
-    # TODO fix the interest rate later
     consumption = []
     for idx, perc in enumerate(percentiles):
-        paymentStream = [min(loanPayment, incomes[idx] / 12 - default) for loanPayment in loanRepay(principle, rate, 10)]
+        percIncome = [monthlyIncomes[idx] for monthlyIncomes in incomes]  # Takes income stream for a perc of individual
+        paymentStream = loanRepay(principle, rate, percIncome, numYears, default)
+
         percCons = []
-        for monthsPayment in paymentStream:
-            percCons.append(incomes[idx] / 12 - monthsPayment)
+        for month, monthsPayment in enumerate(paymentStream):
+            percCons.append(incomes[month][idx] - monthsPayment)
 
         consumption.append(percCons)
     return consumption
 
 
-def ibrRepay(loanAmount, interestRate, income, alpha, familySize, poverty, maxYears=25):  # TODO loan forgiveness
+def ibrRepay(loanAmount, interestRate, incomes, alpha, famSize, poverty, maxYears=25):
     n = 12 * maxYears  # number of repayment periods
     r = interestRate / 12  # monthly interest rate
     p = loanAmount  # principal amount
-    pmt_cap = loanRepay(loanAmount, interestRate, 10)[0]  # payment cap, first months repayment
+    pmt_cap = loanRepayFixed(loanAmount, interestRate, 10)[0]  # payment cap, first months repayment
 
     pmt_list = [0] * n
 
@@ -63,8 +62,8 @@ def ibrRepay(loanAmount, interestRate, income, alpha, familySize, poverty, maxYe
     for i in range(n):
         if p <= 0:
             break
-        else:  # TODO Allow income to change over years
-            pmt = min(alpha * discretIncome(income, familySize, poverty) / 12, pmt_cap)
+        else:
+            pmt = min(alpha * discretIncome(incomes[i], famSize, poverty) / 12, pmt_cap)
             intr_pmt = p * r  # payment to interest
             prin_pmt = pmt - intr_pmt  # payment to principal
             p = p - prin_pmt  # new principal amount
@@ -73,16 +72,15 @@ def ibrRepay(loanAmount, interestRate, income, alpha, familySize, poverty, maxYe
     return pmt_list
 
 
-# TODO What is alpha
-def IBRConsumption(incomes, principle, percentiles, poverty, alpha=0.15, rate=0.06):
+def IBRConsumption(incomes, principle, percentiles, poverty, famSize, alpha=0.15, rate=0.06):
     consumption = []
     for idx, perc in enumerate(percentiles):
-        # TODO fix family size
-        paymentList = ibrRepay(principle, rate, incomes[idx], alpha, 1, poverty)
+        percIncome = [monthlyIncome[idx] for monthlyIncome in incomes]
+        paymentList = ibrRepay(principle, rate, percIncome, alpha, famSize, poverty)
 
         percCons = []
-        for payment in paymentList:
-            percCons.append(incomes[idx] / 12 - payment)
+        for month, payment in enumerate(paymentList):
+            percCons.append(percIncome[month] - payment)
 
         consumption.append(percCons)
 

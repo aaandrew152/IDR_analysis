@@ -16,7 +16,7 @@ def estimateCost(utilityDiffs, choices, costGrid):  # Runs MLE to find best cost
 
 
 def normProb(newDiff):  # Calculates the normal prob of a loan
-    return scipy.stats.norm(0, 20000).cdf(newDiff)  # TODO Determine if std dev is fine
+    return scipy.stats.norm(0, 100000).cdf(newDiff)  # TODO Determine if std dev is fine
 
 
 def calcLikelihood(utilityDiffs, loanChoices, IDRCost):  # Calculates log likelihood value

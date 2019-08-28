@@ -1,5 +1,7 @@
 import Consumption
 import matplotlib.pyplot as plt
+import numpy as np
+
 gammaGrid = [x/2 for x in range(0, 30)]  # Possible risk aversion values
 del gammaGrid[2]  # Skips case where gamma = 1 to avoid dividing by infinity and writing up special ln case
 

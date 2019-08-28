@@ -1,22 +1,12 @@
 Concerns:
-The choice between IDR and loan isn't a one time choice, but repeatedly made throughout the periods
-Need to break down by state
+Need to break down by state, currently unavailable in public SCF data
 Could switch to IDR in a later period based on updated information regarding income
-Double check if both payment levels are correct
-Update the income if age bins change part way through
+How to utilize current income to determine income expectations?
 
 Followups:
 Include interest levels from scf data
 Degree type?
 
 Questions:
-Double check IDR rates
 When gamma = 2 find some people suddenly prefer loans to IDRs
-Check secondary loans & consolidate
-Run with current incomes
-Allow incomes to grow by 5% per year
-Interpolate incomes over ages
-Allow for more gradual income changes wrt ages
-Calculate all incomes once and spit into a excel file rather than repeating every time
-When do they start paying off their loans?
-Check if IDRcost dependent upon characteristics is helpful
+Increasing the std dev of the error term leads the estimated cost to increase.
