@@ -3,8 +3,10 @@
     <words>
       <w>csvfile</w>
       <w>discret</w>
+      <w>logit</w>
       <w>occu</w>
       <w>perc</w>
+      <w>probit</w>
       <w>raphson</w>
     </words>
   </dictionary>

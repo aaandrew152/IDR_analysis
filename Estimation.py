@@ -1,28 +1,42 @@
 import numpy as np
 import scipy.stats
-from math import log
+from math import log, exp
+from scipy.stats import ttest_ind
 
 
-def estimateCost(utilityDiffs, choices, costGrid):  # Runs MLE to find best cost value
+def costMLE(utilityDiffs, choices, costGrid, thetaGrid, estimType):  # Runs MLE to find best cost value
     maxLikelihood = -100000
-    closeCost = 0
+    closestParams = (0, 0)
     for cost in costGrid:
-        likelihood = calcLikelihood(utilityDiffs, choices, cost)
-        if likelihood > maxLikelihood:
-            closeCost = cost
-            maxLikelihood = likelihood
+        for theta in thetaGrid:
+            likelihood = calcLikelihood(utilityDiffs, choices, cost, theta, estimType)
 
-    return closeCost
+            if likelihood > maxLikelihood:
+                closestParams = cost, theta
+                maxLikelihood = likelihood
 
-
-def normProb(newDiff):  # Calculates the normal prob of a loan
-    return scipy.stats.norm(0, 100000).cdf(newDiff)  # TODO Determine if std dev is fine
+    return closestParams
 
 
-def calcLikelihood(utilityDiffs, loanChoices, IDRCost):  # Calculates log likelihood value
+def normProb(c, uDiff, theta, stdDev=10000):  # Calculates the normal prob of a loan
+    return scipy.stats.norm(0, stdDev).cdf(c - theta * uDiff)
+
+
+def logit(c, uDiff, theta):  # Estimate ln p/(1-p) = C_I - \theta \Delta U
+    try:
+        prob = 1 / (1 + exp(c - theta * uDiff))
+    except OverflowError:  # Occurs when the value of newDiff is so large so as to make the power function explode
+        prob = 0
+    return prob
+
+
+def calcLikelihood(utilityDiffs, loanChoices, IDRCost, theta, estimType=0):  # Calculates log likelihood value
     logLikelihood = 0
     for idx, diff in enumerate(utilityDiffs):
-        loanLikelihood = normProb(diff + IDRCost)
+        if estimType:
+            loanLikelihood = normProb(IDRCost, diff, theta)
+        else:
+            loanLikelihood = logit(IDRCost, diff, theta)
 
         if loanChoices[idx]:  # If the borrower took a loan
             likelihood = loanLikelihood
@@ -67,3 +81,16 @@ def newton_raphson(model, tol=1e-3, max_iter=1000, display=True):  # TODO Unused
     print(f'β_hat = {model.beta.flatten()}')
 
     return model.beta.flatten()        # Return a flat array for β (instead of a k_by_1 column vector)
+
+
+def statSig(uDiffs, choices):  # Separates the sample into those who choose IDR or not and tests for significance in uDiff
+    loans = []
+    idrs = []
+
+    for idx, diff in enumerate(uDiffs):
+        if choices[idx] == 1:
+            loans.append(diff)
+        else:
+            idrs.append(diff)
+
+    return ttest_ind(loans, idrs)

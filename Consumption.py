@@ -1,4 +1,6 @@
 from math import floor
+from matplotlib import pyplot as plt
+import numpy as np
 
 
 def discretIncome(monthlyIncome, familySize, poverty):
@@ -22,11 +24,14 @@ def loanRepay(loanAmount, interestRate, incomes, numYears, default, maxYears=25)
 
     pmt_list = [0] * (12 * maxYears)
 
-    for i in range(n):
+    for i in range(12 * maxYears):
         if p <= 0:
             break
         else:
-            pmt = min(incomes[i] - default, fixed_pmt)   # min of monthly income and fixed payment amount
+            if incomes[i] >= default:
+                pmt = min(incomes[i] - default, fixed_pmt)   # min of monthly income and fixed payment amount
+            else:
+                pmt = default / 100  # TODO FIX
             intr_pmt = p * r  # payment to interest
             prin_pmt = pmt - intr_pmt  # payment to principal
             p = p - prin_pmt  # new principal amount
@@ -35,8 +40,9 @@ def loanRepay(loanAmount, interestRate, incomes, numYears, default, maxYears=25)
     return pmt_list
 
 
-def loanConsumption(incomes, principle, percentiles, numYears=10, rate=0.06, default=.1):
-    # TODO check if correct default method (currently 0.1)
+def loanConsumption(incomes, principle, percentiles, numYears=10, rate=0.06, default=.01):
+    # TODO check if correct default method
+    plt.show()
     consumption = []
     for idx, perc in enumerate(percentiles):
         percIncome = [monthlyIncomes[idx] for monthlyIncomes in incomes]  # Takes income stream for a perc of individual
@@ -50,7 +56,7 @@ def loanConsumption(incomes, principle, percentiles, numYears=10, rate=0.06, def
     return consumption
 
 
-def ibrRepay(loanAmount, interestRate, incomes, alpha, famSize, poverty, maxYears=25):
+def ibrRepay(loanAmount, interestRate, monthlyIncomes, alpha, famSize, poverty, maxYears=25):
     n = 12 * maxYears  # number of repayment periods
     r = interestRate / 12  # monthly interest rate
     p = loanAmount  # principal amount
@@ -63,7 +69,7 @@ def ibrRepay(loanAmount, interestRate, incomes, alpha, famSize, poverty, maxYear
         if p <= 0:
             break
         else:
-            pmt = min(alpha * discretIncome(incomes[i], famSize, poverty) / 12, pmt_cap)
+            pmt = min(alpha * discretIncome(monthlyIncomes[i], famSize, poverty) / 12, pmt_cap)
             intr_pmt = p * r  # payment to interest
             prin_pmt = pmt - intr_pmt  # payment to principal
             p = p - prin_pmt  # new principal amount
@@ -74,12 +80,12 @@ def ibrRepay(loanAmount, interestRate, incomes, alpha, famSize, poverty, maxYear
 
 def IBRConsumption(incomes, principle, percentiles, poverty, famSize, alpha=0.15, rate=0.06):
     consumption = []
-    for idx, perc in enumerate(percentiles):
+    for idx, _ in enumerate(percentiles):
         percIncome = [monthlyIncome[idx] for monthlyIncome in incomes]
-        paymentList = ibrRepay(principle, rate, percIncome, alpha, famSize, poverty)
+        paymentStream = ibrRepay(principle, rate, percIncome, alpha, famSize, poverty)
 
         percCons = []
-        for month, payment in enumerate(paymentList):
+        for month, payment in enumerate(paymentStream):
             percCons.append(percIncome[month] - payment)
 
         consumption.append(percCons)

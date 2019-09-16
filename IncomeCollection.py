@@ -27,7 +27,7 @@ class Borrower:
         self.principle = int(excelBorrower[1])
         self.IDR = 1 if int(excelBorrower[2]) else 0
         self.remainingLoan = int(excelBorrower[3])
-        self.occu = int(excelBorrower[4]) - 1 # For list entries
+        self.occu = int(excelBorrower[4]) - 1  # For list entries
         self.educ = int(excelBorrower[6])
         self.famSize = int(excelBorrower[7])
         self.determineAgeBin()
@@ -50,7 +50,7 @@ class Borrower:
             self.age_bin = 0
 
 
-def calcIncomes(percentiles):  # Calculates all combinations of age, occu, and perc income values
+def calcIncomes(percentiles, minIncome):  # Calculates all combinations of age, occu, and perc income values
     loc = "data/acs_income.csv"
 
     incomeList = []
@@ -77,7 +77,7 @@ def calcIncomes(percentiles):  # Calculates all combinations of age, occu, and p
                 for idx, perc in enumerate(percentiles):
                     income = float(parseRow[idx + 2])
                     if income == 0:
-                        percIncomes[age_bin][occu].append(1)  # TODO Change minimum income
+                        percIncomes[age_bin][occu].append(minIncome)
                     else:
                         percIncomes[age_bin][occu].append(income)
 
